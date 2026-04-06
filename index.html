@@ -13,7 +13,7 @@ body {
 }
 textarea {
     width: 100%;
-    height: 200px;
+    height: 220px;
 }
 button {
     padding: 10px 20px;
@@ -24,17 +24,14 @@ button {
 </head>
 <body>
 
-<h2>GPX轉換器</h2>
-
-<p>支援格式：</p>
-<ul>
-<li>GPX (trkpt / rtept)</li>
-<li>純經緯度 (lat,lon)</li>
-</ul>
+<h2>GPX轉換器（完整版）</h2>
 
 <input type="file" id="fileInput"><br><br>
 
-<textarea id="inputText" placeholder="或貼上經緯度 / GPX內容"></textarea><br>
+<textarea id="inputText" placeholder="貼上資料：
+1. 24.123,121.456 寶可夢補給點、道館名稱、皮克敏菇菇名稱
+2. 24.123,121.456
+3. GPX內容"></textarea><br>
 
 <button onclick="convert()">轉換並下載</button>
 
@@ -42,34 +39,49 @@ button {
 function convert() {
     let text = document.getElementById("inputText").value.trim();
     let points = [];
-    let name = "GPX轉換結果";
+    let gpxName = "GPX轉換結果";
 
-    // 判斷是否XML
+    // ===== GPX XML =====
     if (text.startsWith("<")) {
         let parser = new DOMParser();
         let xml = parser.parseFromString(text, "text/xml");
 
-        // 抓 name
         let nameNode = xml.querySelector("name");
-        if (nameNode) name = nameNode.textContent;
+        if (nameNode) gpxName = nameNode.textContent;
 
-        // 抓 trkpt
-        xml.querySelectorAll("trkpt").forEach(p => {
-            points.push([p.getAttribute("lat"), p.getAttribute("lon")]);
-        });
-
-        // 抓 rtept
-        xml.querySelectorAll("rtept").forEach(p => {
-            points.push([p.getAttribute("lat"), p.getAttribute("lon")]);
+        xml.querySelectorAll("trkpt, rtept").forEach(p => {
+            points.push({
+                lat: p.getAttribute("lat"),
+                lon: p.getAttribute("lon"),
+                name: ""
+            });
         });
 
     } else {
-        // 純座標
-        let lines = text.split("\n");
+        // ===== 純文字座標 =====
+        let lines = text.split(/\r?\n/);
+
         lines.forEach(line => {
-            let parts = line.split(",");
-            if (parts.length === 2) {
-                points.push([parts[0].trim(), parts[1].trim()]);
+            line = line.trim();
+            if (!line) return;
+
+            line = line.replace(/\s+/g, " ");
+
+            // 支援：
+            // 24.123,121.456 名稱
+            // 24.123 , 121.456 名稱
+            // 24.123,121.456
+
+            let match = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)(?:\s+(.*))?$/);
+
+            if (match) {
+                points.push({
+                    lat: match[1],
+                    lon: match[3],
+                    name: match[5] ? match[5].trim() : ""
+                });
+            } else {
+                console.log("解析失敗:", line);
             }
         });
     }
@@ -79,19 +91,25 @@ function convert() {
         return;
     }
 
-    // 生成 GPX
+    // ===== 生成 GPX =====
     let gpx = `<?xml version="1.0" encoding="utf-8"?>
-<gpx version="1.1" creator="">
-<name>${name}</name>
+<gpx version="1.1" creator="by JCC" xmlns="http://www.topografix.com/GPX/1/1">
+  <name>${gpxName}</name>
 `;
 
     points.forEach(p => {
-        gpx += `<wpt lat="${p[0]}" lon="${p[1]}" />\n`;
+        gpx += `  <wpt lat="${p.lat}" lon="${p.lon}">
+`;
+        if (p.name) {
+            gpx += `    <name>${p.name}</name>
+`;
+        }
+        gpx += `  </wpt>
+`;
     });
 
     gpx += "</gpx>";
 
-    // 下載
     let blob = new Blob([gpx], { type: "application/xml" });
     let a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -99,7 +117,7 @@ function convert() {
     a.click();
 }
 
-// 檔案讀取
+// ===== 檔案讀取 =====
 document.getElementById("fileInput").addEventListener("change", function(e) {
     let file = e.target.files[0];
     if (!file) return;
@@ -114,4 +132,3 @@ document.getElementById("fileInput").addEventListener("change", function(e) {
 
 </body>
 </html>
-s
