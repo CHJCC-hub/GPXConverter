@@ -4,32 +4,44 @@
 <head>
 <meta charset="UTF-8">
 <title>GPX轉換器</title>
+
 <style>
 body {
     font-family: Arial, sans-serif;
     max-width: 700px;
     margin: 40px auto;
-    padding: 20px;
+    padding: 1em;
+
+    /* 🔥 自適應字體 */
+    font-size: clamp(14px, 2.8vw, 20px);
+    line-height: 1.6;
 }
+
 textarea {
     width: 100%;
     height: 260px;
+    font-size: 1em;
+    padding: 0.8em;
+    box-sizing: border-box;
 }
+
 button {
-    padding: 10px 20px;
-    margin-top: 10px;
+    font-size: 1em;
+    padding: 0.7em 1.4em;
+    border-radius: 8px;
     cursor: pointer;
 }
 </style>
+
 </head>
 <body>
 
-<h2>GPX轉換器（完整強化版）</h2>
+<h2>GPX轉換器（完整版）</h2>
 
 <input type="file" id="fileInput"><br><br>
 
 <textarea id="inputText" placeholder="貼上資料：
-1. 24.123,121.456 寶可夢補給點、道館名稱、皮克敏菇菇名稱
+1. 24.123,121.456 寶可夢(給點、道館名稱)、皮克敏(菇菇)
 2. 24.123,121.456
    名稱
 3. 24.123,121.456
@@ -66,7 +78,7 @@ function convert() {
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
 
-            // 嘗試抓座標
+            // 純座標（上下行格式）
             let match = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/);
 
             if (match) {
@@ -74,16 +86,16 @@ function convert() {
                 let lon = match[3];
                 let name = "";
 
-                // 下一行如果不是座標 → 當名稱
+                // 下一行不是座標 → 當名稱
                 if (i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+(\.\d+)?)\s*,/)) {
                     name = lines[i + 1];
-                    i++; // 跳過名稱行
+                    i++;
                 }
 
                 points.push({ lat, lon, name });
 
             } else {
-                // 嘗試同一行格式
+                // 同一行格式
                 let match2 = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)(?:\s+(.*))?$/);
 
                 if (match2) {
@@ -104,6 +116,7 @@ function convert() {
         return;
     }
 
+    // ===== 生成 GPX =====
     let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="by JCC" xmlns="http://www.topografix.com/GPX/1/1">
   <name>${gpxName}</name>
@@ -123,10 +136,12 @@ function convert() {
     gpx += "</gpx>";
 
     let blob = new Blob([gpx], { type: "application/xml" });
-	let a = document.createElement("a");
-	a.href = URL.createObjectURL(blob);
-	a.download = "converted.gpx";
-	a.click();
+
+    // 👉 保持你原本下載方式
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "converted.gpx";
+    a.click();
 }
 
 // ===== 檔案讀取 =====
