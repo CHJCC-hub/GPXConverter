@@ -12,7 +12,7 @@ body {
     margin: 40px auto;
     padding: 1em;
 
-    /* 🔥 自適應字體 */
+    /* 自適應字體 */
     font-size: clamp(14px, 2.8vw, 20px);
     line-height: 1.6;
 }
@@ -25,11 +25,35 @@ textarea {
     box-sizing: border-box;
 }
 
+/* 🔥 大按鈕 */
+.file-btn {
+    display: inline-block;
+    font-size: 1.1em;
+    padding: 0.8em 1.4em;
+    border-radius: 10px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* 隱藏原生 input */
+.file-btn input {
+    display: none;
+}
+
 button {
     font-size: 1em;
     padding: 0.7em 1.4em;
     border-radius: 8px;
     cursor: pointer;
+    margin-top: 10px;
+}
+
+#fileName {
+    margin-top: 5px;
+    color: #555;
 }
 </style>
 
@@ -38,7 +62,14 @@ button {
 
 <h2>GPX轉換器（完整版）</h2>
 
-<input type="file" id="fileInput"><br><br>
+<!-- 🔥 自訂大按鈕 -->
+
+<label class="file-btn">
+  選擇檔案
+  <input type="file" id="fileInput">
+</label>
+
+<div id="fileName"></div>
 
 <textarea id="inputText" placeholder="貼上資料：
 1. 24.123,121.456 寶可夢(給點、道館名稱)、皮克敏(菇菇)
@@ -78,7 +109,6 @@ function convert() {
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
 
-            // 純座標（上下行格式）
             let match = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/);
 
             if (match) {
@@ -86,7 +116,6 @@ function convert() {
                 let lon = match[3];
                 let name = "";
 
-                // 下一行不是座標 → 當名稱
                 if (i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+(\.\d+)?)\s*,/)) {
                     name = lines[i + 1];
                     i++;
@@ -95,7 +124,6 @@ function convert() {
                 points.push({ lat, lon, name });
 
             } else {
-                // 同一行格式
                 let match2 = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)(?:\s+(.*))?$/);
 
                 if (match2) {
@@ -116,7 +144,6 @@ function convert() {
         return;
     }
 
-    // ===== 生成 GPX =====
     let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="by JCC" xmlns="http://www.topografix.com/GPX/1/1">
   <name>${gpxName}</name>
@@ -137,17 +164,19 @@ function convert() {
 
     let blob = new Blob([gpx], { type: "application/xml" });
 
-    // 👉 保持你原本下載方式
+    // 保持你原本下載方式
     let a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "converted.gpx";
     a.click();
 }
 
-// ===== 檔案讀取 =====
+// ===== 檔案讀取 + 顯示檔名 =====
 document.getElementById("fileInput").addEventListener("change", function(e) {
     let file = e.target.files[0];
     if (!file) return;
+
+    document.getElementById("fileName").textContent = "已選檔案：" + file.name;
 
     let reader = new FileReader();
     reader.onload = function(e) {
