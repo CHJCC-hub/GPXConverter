@@ -13,7 +13,7 @@ body {
 }
 textarea {
     width: 100%;
-    height: 220px;
+    height: 260px;
 }
 button {
     padding: 10px 20px;
@@ -24,14 +24,16 @@ button {
 </head>
 <body>
 
-<h2>GPX轉換器（完整版）</h2>
+<h2>GPX轉換器（完整強化版）</h2>
 
 <input type="file" id="fileInput"><br><br>
 
 <textarea id="inputText" placeholder="貼上資料：
 1. 24.123,121.456 寶可夢補給點、道館名稱、皮克敏菇菇名稱
 2. 24.123,121.456
-3. GPX內容"></textarea><br>
+   名稱
+3. 24.123,121.456
+4. GPX內容"></textarea><br>
 
 <button onclick="convert()">轉換並下載</button>
 
@@ -58,32 +60,43 @@ function convert() {
         });
 
     } else {
-        // ===== 純文字座標 =====
-        let lines = text.split(/\r?\n/);
+        // ===== 文字模式 =====
+        let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
 
-        lines.forEach(line => {
-            line = line.trim();
-            if (!line) return;
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
 
-            line = line.replace(/\s+/g, " ");
-
-            // 支援：
-            // 24.123,121.456 名稱
-            // 24.123 , 121.456 名稱
-            // 24.123,121.456
-
-            let match = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)(?:\s+(.*))?$/);
+            // 嘗試抓座標
+            let match = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/);
 
             if (match) {
-                points.push({
-                    lat: match[1],
-                    lon: match[3],
-                    name: match[5] ? match[5].trim() : ""
-                });
+                let lat = match[1];
+                let lon = match[3];
+                let name = "";
+
+                // 下一行如果不是座標 → 當名稱
+                if (i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+(\.\d+)?)\s*,/)) {
+                    name = lines[i + 1];
+                    i++; // 跳過名稱行
+                }
+
+                points.push({ lat, lon, name });
+
             } else {
-                console.log("解析失敗:", line);
+                // 嘗試同一行格式
+                let match2 = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)(?:\s+(.*))?$/);
+
+                if (match2) {
+                    points.push({
+                        lat: match2[1],
+                        lon: match2[3],
+                        name: match2[5] ? match2[5].trim() : ""
+                    });
+                } else {
+                    console.log("無法解析:", line);
+                }
             }
-        });
+        }
     }
 
     if (points.length === 0) {
@@ -91,7 +104,6 @@ function convert() {
         return;
     }
 
-    // ===== 生成 GPX =====
     let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="by JCC" xmlns="http://www.topografix.com/GPX/1/1">
   <name>${gpxName}</name>
