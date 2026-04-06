@@ -11,8 +11,6 @@ body {
     max-width: 700px;
     margin: 40px auto;
     padding: 1em;
-
-    /* 自適應字體 */
     font-size: clamp(14px, 2.8vw, 20px);
     line-height: 1.6;
 }
@@ -25,7 +23,6 @@ textarea {
     box-sizing: border-box;
 }
 
-/* 🔥 大按鈕 */
 .file-btn {
     display: inline-block;
     font-size: 1.1em;
@@ -38,7 +35,6 @@ textarea {
     margin-bottom: 10px;
 }
 
-/* 隱藏原生 input */
 .file-btn input {
     display: none;
 }
@@ -49,6 +45,14 @@ button {
     border-radius: 8px;
     cursor: pointer;
     margin-top: 10px;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 0.5em;
+    margin-top: 10px;
+    font-size: 1em;
+    box-sizing: border-box;
 }
 
 #fileName {
@@ -62,14 +66,14 @@ button {
 
 <h2>GPX轉換器（完整版）</h2>
 
-<!-- 🔥 自訂大按鈕 -->
-
 <label class="file-btn">
-  選擇檔案
+  選擇GPX檔案
   <input type="file" id="fileInput">
 </label>
 
 <div id="fileName"></div>
+
+<input type="text" id="fileNameInput" placeholder="輸出檔名（可不填）">
 
 <textarea id="inputText" placeholder="貼上資料：
 1. 24.123,121.456 寶可夢(補給點、道館名稱)、皮克敏(菇菇)
@@ -81,18 +85,32 @@ button {
 <button onclick="convert()">轉換並下載</button>
 
 <script>
+let originalFileName = "";
+
+// ===== 檔案讀取 =====
+document.getElementById("fileInput").addEventListener("change", function(e) {
+    let file = e.target.files[0];
+    if (!file) return;
+
+    originalFileName = file.name.replace(/\.gpx$/i, "");
+    document.getElementById("fileName").textContent = "已選檔案：" + file.name;
+
+    let reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById("inputText").value = e.target.result;
+    };
+    reader.readAsText(file);
+});
+
+// ===== 轉換 =====
 function convert() {
     let text = document.getElementById("inputText").value.trim();
     let points = [];
-    let gpxName = "GPX轉換結果";
 
-    // ===== GPX XML =====
+    // ===== GPX =====
     if (text.startsWith("<")) {
         let parser = new DOMParser();
         let xml = parser.parseFromString(text, "text/xml");
-
-        let nameNode = xml.querySelector("name");
-        if (nameNode) gpxName = nameNode.textContent;
 
         xml.querySelectorAll("trkpt, rtept").forEach(p => {
             points.push({
@@ -103,38 +121,26 @@ function convert() {
         });
 
     } else {
-        // ===== 文字模式 =====
         let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
 
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
 
-            let match = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/);
+            // 👉 抓座標（最穩寫法）
+            let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
 
             if (match) {
                 let lat = match[1];
-                let lon = match[3];
+                let lon = match[2];
                 let name = "";
 
-                if (i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+(\.\d+)?)\s*,/)) {
+                // 下一行不是座標 → 當名稱
+                if (i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+(?:\.\d+)?)\s*,/)) {
                     name = lines[i + 1];
                     i++;
                 }
 
                 points.push({ lat, lon, name });
-
-            } else {
-                let match2 = line.match(/^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)(?:\s+(.*))?$/);
-
-                if (match2) {
-                    points.push({
-                        lat: match2[1],
-                        lon: match2[3],
-                        name: match2[5] ? match2[5].trim() : ""
-                    });
-                } else {
-                    console.log("無法解析:", line);
-                }
             }
         }
     }
@@ -144,9 +150,9 @@ function convert() {
         return;
     }
 
+    // ===== 生成 GPX =====
     let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="by JCC" xmlns="http://www.topografix.com/GPX/1/1">
-  <name>${gpxName}</name>
 `;
 
     points.forEach(p => {
@@ -162,28 +168,25 @@ function convert() {
 
     gpx += "</gpx>";
 
+    // ===== 檔名邏輯 =====
+    let inputName = document.getElementById("fileNameInput").value.trim();
+    let finalName = "";
+
+    if (inputName) {
+        finalName = inputName;
+    } else if (originalFileName) {
+        finalName = originalFileName + "_convert";
+    } else {
+        finalName = "converted";
+    }
+
     let blob = new Blob([gpx], { type: "application/xml" });
 
-    // 保持你原本下載方式
     let a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "converted.gpx";
+    a.download = finalName + ".gpx";
     a.click();
 }
-
-// ===== 檔案讀取 + 顯示檔名 =====
-document.getElementById("fileInput").addEventListener("change", function(e) {
-    let file = e.target.files[0];
-    if (!file) return;
-
-    document.getElementById("fileName").textContent = "已選檔案：" + file.name;
-
-    let reader = new FileReader();
-    reader.onload = function(e) {
-        document.getElementById("inputText").value = e.target.result;
-    };
-    reader.readAsText(file);
-});
 </script>
 
 </body>
