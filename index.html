@@ -122,11 +122,19 @@ function convert() {
 
     gpx += "</gpx>";
 
-    let blob = new Blob([gpx], { type: "application/xml" });
+    let url = URL.createObjectURL(blob);
+
+// Safari 判斷
+if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    // 直接開新頁顯示內容
+    window.open(url, "_blank");
+} else {
+    // 其他瀏覽器正常下載
     let a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = "converted.gpx";
     a.click();
+}
 }
 
 // ===== 檔案讀取 =====
