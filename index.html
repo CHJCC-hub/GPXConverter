@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>GPX轉換器</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 20px;
+}
+textarea {
+    width: 100%;
+    height: 200px;
+}
+button {
+    padding: 10px 20px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h2>GPX轉換器</h2>
+
+<p>支援格式：</p>
+<ul>
+<li>GPX (trkpt / rtept)</li>
+<li>純經緯度 (lat,lon)</li>
+</ul>
+
+<input type="file" id="fileInput"><br><br>
+
+<textarea id="inputText" placeholder="或貼上經緯度 / GPX內容"></textarea><br>
+
+<button onclick="convert()">轉換並下載</button>
+
+<script>
+function convert() {
+    let text = document.getElementById("inputText").value.trim();
+    let points = [];
+    let name = "GPX轉換結果";
+
+    // 判斷是否XML
+    if (text.startsWith("<")) {
+        let parser = new DOMParser();
+        let xml = parser.parseFromString(text, "text/xml");
+
+        // 抓 name
+        let nameNode = xml.querySelector("name");
+        if (nameNode) name = nameNode.textContent;
+
+        // 抓 trkpt
+        xml.querySelectorAll("trkpt").forEach(p => {
+            points.push([p.getAttribute("lat"), p.getAttribute("lon")]);
+        });
+
+        // 抓 rtept
+        xml.querySelectorAll("rtept").forEach(p => {
+            points.push([p.getAttribute("lat"), p.getAttribute("lon")]);
+        });
+
+    } else {
+        // 純座標
+        let lines = text.split("\n");
+        lines.forEach(line => {
+            let parts = line.split(",");
+            if (parts.length === 2) {
+                points.push([parts[0].trim(), parts[1].trim()]);
+            }
+        });
+    }
+
+    if (points.length === 0) {
+        alert("沒有抓到任何座標！");
+        return;
+    }
+
+    // 生成 GPX
+    let gpx = `<?xml version="1.0" encoding="utf-8"?>
+<gpx version="1.1" creator="">
+<name>${name}</name>
+`;
+
+    points.forEach(p => {
+        gpx += `<wpt lat="${p[0]}" lon="${p[1]}" />\n`;
+    });
+
+    gpx += "</gpx>";
+
+    // 下載
+    let blob = new Blob([gpx], { type: "application/xml" });
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "converted.gpx";
+    a.click();
+}
+
+// 檔案讀取
+document.getElementById("fileInput").addEventListener("change", function(e) {
+    let file = e.target.files[0];
+    if (!file) return;
+
+    let reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById("inputText").value = e.target.result;
+    };
+    reader.readAsText(file);
+});
+</script>
+
+</body>
+</html>
+s
