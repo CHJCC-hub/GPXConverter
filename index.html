@@ -75,10 +75,9 @@ input[type="text"] {
 
 <input type="text" id="fileNameInput" placeholder="輸出檔名（可不填）">
 
-<textarea id="inputText" placeholder="建議座標資料：
+<textarea id="inputText" placeholder="建議貼上的座標格式：
 1. 24.123,121.456 寶可夢(補給點、道館名稱)、皮克敏(菇菇)
-2. 24.123,121.456(換行)
-   +名稱
+2. 24.123,121.456(換行)名稱
 3. 24.123,121.456(純座標)
 4. 其他GPX檔案格式，可使用讀檔，也可直接貼上"></textarea><br>
 
@@ -110,7 +109,7 @@ function convert() {
     // ===== GPX =====
     if (text.startsWith("<")) {
         let parser = new DOMParser();
-        let xml = parser.parseFromString(text, "text/xml");
+        let xml = new DOMParser().parseFromString(text, "text/xml");
 
         xml.querySelectorAll("trkpt, rtept").forEach(p => {
             points.push({
@@ -127,16 +126,16 @@ function convert() {
             let line = lines[i];
 
             // 👉 抓座標（最穩寫法）
-            let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+            let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
 
             if (match) {
                 let lat = match[1];
                 let lon = match[2];
-                let name = "";
+                let name = match[3] ? match[3].trim() : "";
 
-                // 下一行不是座標 → 當名稱
-                if (i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+(?:\.\d+)?)\s*,/)) {
-                    name = lines[i + 1];
+                 // 下一行補名稱
+                if (!name && i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+)/)) {
+                    name = lines[i + 1].trim();
                     i++;
                 }
 
@@ -159,7 +158,8 @@ function convert() {
         gpx += `  <wpt lat="${p.lat}" lon="${p.lon}">
 `;
         if (p.name) {
-            gpx += `    <name>${p.name}</name>
+              let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
+    gpx += `    <name><![CDATA[${safeName}]]></name>
 `;
         }
         gpx += `  </wpt>
