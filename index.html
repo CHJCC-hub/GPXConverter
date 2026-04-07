@@ -77,16 +77,18 @@ input[type="text"] {
 
 <textarea id="inputText" placeholder="支援的座標格式：
 1. 24.123,121.456 路徑點名稱
-2. 24.123,121.456(換行)路徑點名稱
-3. 24.123,121.456(純座標)
-4. 其他GPX格式，可直接讀檔"></textarea><br>
+2. 24.123,121.456 (換行)路徑點名稱
+3. (24.123,121.456)
+4. 北24.123° 東121.456°
+5. 24.123° N, 121.456° E
+6. 其他GPX格式，可直接讀檔"></textarea><br>
 
 <button onclick="convert()">轉換並下載</button>
 
 <script>
 let originalFileName = "";
 
-// ===== 檔案讀取 =====
+// ===== 讀檔 =====
 document.getElementById("fileInput").addEventListener("change", function(e) {
     let file = e.target.files[0];
     if (!file) return;
@@ -108,7 +110,6 @@ function convert() {
 
     // ===== GPX =====
     if (text.startsWith("<")) {
-        let parser = new DOMParser();
         let xml = new DOMParser().parseFromString(text, "text/xml");
 
         xml.querySelectorAll("trkpt, rtept").forEach(p => {
@@ -125,16 +126,59 @@ function convert() {
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
 
-            // 👉 抓座標（最穩寫法）
+            let lat = null, lon = null, name = "";
+
+            // ===== 1️⃣ 標準格式 =====
             let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
-
             if (match) {
-                let lat = match[1];
-                let lon = match[2];
-                let name = match[3] ? match[3].trim() : "";
+                lat = match[1];
+                lon = match[2];
+                name = match[3] ? match[3].trim() : "";
+            }
 
-                 // 下一行補名稱
-                if (!name && i + 1 < lines.length && !lines[i + 1].match(/^(-?\d+)/)) {
+            // ===== 2️⃣ 括號格式 =====
+            if (!lat) {
+                let match2 = line.match(/^\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?(?:\s+(.*))?/);
+                if (match2) {
+                    lat = match2[1];
+                    lon = match2[2];
+                    name = match2[3] ? match2[3].trim() : "";
+                }
+            }
+
+            // ===== 3️⃣ 中文方向（東西南北） =====
+            if (!lat) {
+                let match3 = line.match(/([北南])\s*(\d+(?:\.\d+)?)°?\s*([東西])\s*(\d+(?:\.\d+)?)°?(?:\s+(.*))?/);
+                if (match3) {
+                    let latDir = match3[1];
+                    let latVal = parseFloat(match3[2]);
+                    let lonDir = match3[3];
+                    let lonVal = parseFloat(match3[4]);
+
+                    lat = (latDir === "南") ? -latVal : latVal;
+                    lon = (lonDir === "西") ? -lonVal : lonVal;
+                    name = match3[5] ? match3[5].trim() : "";
+                }
+            }
+			// ===== 4️⃣ 英文方向（40.77° N, 73.97° W）=====
+			if (!lat) {
+				let match4 = line.match(/(\d+(?:\.\d+)?)°?\s*([NS])\s*,\s*(\d+(?:\.\d+)?)°?\s*([EW])(?:\s+(.*))?/i);
+				if (match4) {
+					let latVal = parseFloat(match4[1]);
+					let latDir = match4[2].toUpperCase();
+					let lonVal = parseFloat(match4[3]);
+					let lonDir = match4[4].toUpperCase();
+
+					lat = (latDir === "S") ? -latVal : latVal;
+					lon = (lonDir === "W") ? -lonVal : lonVal;
+					name = match4[5] ? match4[5].trim() : "";
+				}
+			}
+            // ===== 成功解析 =====
+            if (lat !== null && lon !== null) {
+
+                // 下一行補名稱
+                if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
                     name = lines[i + 1].trim();
                     i++;
                 }
@@ -149,7 +193,7 @@ function convert() {
         return;
     }
 
-    // ===== 生成 GPX =====
+     // ===== 生成 GPX =====
     let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="by JCC" xmlns="http://www.topografix.com/GPX/1/1">
 `;
