@@ -127,17 +127,39 @@ document.getElementById("fileInput").addEventListener("change", function(e) {
 });
 
 // ===== 去重 =====
+//function removeDuplicate(points) {
+    //let seen = new Set();
+    //let duplicateCount = 0;
+
+   // let unique = points.filter(p => {
+       // let key = `${parseFloat(p.lat).toFixed(8)},${parseFloat(p.lon).toFixed(8)}`;
+        //if (seen.has(key)) {
+          //  duplicateCount++;
+           // return false;
+       // }
+       // seen.add(key);
+        //return true;
+   // });
+
+    //return { unique, duplicateCount };
+//}
+// ===== 去除連續重複點 =====
 function removeDuplicate(points) {
-    let seen = new Set();
     let duplicateCount = 0;
 
-    let unique = points.filter(p => {
-        let key = `${parseFloat(p.lat).toFixed(6)},${parseFloat(p.lon).toFixed(6)}`;
-        if (seen.has(key)) {
+    let unique = points.filter((p, index, arr) => {
+        if (index === 0) return true;
+
+        let prev = arr[index - 1];
+
+        let keyCurrent = `${parseFloat(p.lat).toFixed(8)},${parseFloat(p.lon).toFixed(8)}`;
+        let keyPrev = `${parseFloat(prev.lat).toFixed(8)},${parseFloat(prev.lon).toFixed(8)}`;
+
+        if (keyCurrent === keyPrev) {
             duplicateCount++;
             return false;
         }
-        seen.add(key);
+
         return true;
     });
 
