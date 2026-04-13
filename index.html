@@ -74,7 +74,14 @@ input[type="text"] {
 <div id="fileName"></div>
 <div id="stats" style="margin-top:10px;color:#333;"></div>
 <input type="text" id="fileNameInput" placeholder="輸出檔名（可不填）">
-
+<label>
+  <input type="checkbox" id="circleMode"> 種花模式(繞圈)
+</label>
+<input type="text" id="radiusInput" placeholder="種花半徑（公尺，例如：35）" value="35">
+<label class="text">
+  種花路徑點數量
+ </label>
+<input type="text" id="pointnum" placeholder="種花路徑點數量（例如：5）" value="5">
 <textarea id="inputText" placeholder="支援的座標格式：
 1. 24.123,121.456 路徑點名稱
 2. 24.123,121.456 (換行)路徑點名稱
@@ -85,8 +92,9 @@ input[type="text"] {
 
 <button onclick="convert()">轉換並下載</button>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
 
 
 <script>
@@ -143,6 +151,33 @@ document.getElementById("fileInput").addEventListener("change", function(e) {
 
     //return { unique, duplicateCount };
 //}
+// ===== 種花繞圈 =====
+function generatePentagon(lat, lon, radius,pointnum) {
+    let result = [];
+
+    let startAngle = -90; // 讓圖形比較自然（上方開始）
+	let angleStep = 360 / pointnum;
+
+    for (let i = 0; i < pointnum; i++) {
+       let angle = (startAngle + i * angleStep) * Math.PI / 180;
+
+        let dx = radius * Math.cos(angle);
+        let dy = radius * Math.sin(angle);
+
+        let newLat = lat + (dy / 111320);
+        let newLon = lon + (dx / (111320 * Math.cos(lat * Math.PI / 180)));
+
+        result.push({
+            lat: newLat.toFixed(8),
+            lon: newLon.toFixed(8)
+        });
+    }
+
+    // 關閉路徑
+    result.push(result[0]);
+
+    return result;
+}
 // ===== 去除連續重複點 =====
 function removeDuplicate(points) {
     let duplicateCount = 0;
@@ -165,7 +200,7 @@ function removeDuplicate(points) {
 
     return { unique, duplicateCount };
 }
-
+let markerGroup;
 // ===== 畫地圖 =====
 function drawMap(points) {
     initMap();
@@ -174,14 +209,22 @@ function drawMap(points) {
         map.removeLayer(polyline);
     }
 
+    if (markerGroup) {
+        map.removeLayer(markerGroup);
+    }
+
+    markerGroup = L.layerGroup().addTo(map);
+
     let latlngs = [];
 
     points.forEach(p => {
         let lat = parseFloat(p.lat);
         let lon = parseFloat(p.lon);
 
-        let marker = L.marker([lat, lon]).addTo(map);
+        let marker = L.marker([lat, lon]);
         if (p.name) marker.bindPopup(p.name);
+
+        markerGroup.addLayer(marker);
 
         latlngs.push([lat, lon]);
     });
@@ -202,7 +245,7 @@ function convert() {
     if (text.startsWith("<")) {
         let xml = new DOMParser().parseFromString(text, "text/xml");
 
-        xml.querySelectorAll("trkpt, rtept").forEach(p => {
+        xml.querySelectorAll("trkpt, rtept, wpt").forEach(p => {
             points.push({
                 lat: p.getAttribute("lat"),
                 lon: p.getAttribute("lon"),
@@ -282,6 +325,42 @@ function convert() {
 	let originalCount = points.length;
 	let result = removeDuplicate(points);
 	let uniquePoints = result.unique;
+	
+	let pointnum = parseFloat(document.getElementById("pointnum")?.value);
+	let circleMode = document.getElementById("circleMode")?.checked;
+	let radius = parseFloat(document.getElementById("radiusInput")?.value);
+	if (circleMode) {
+    if (isNaN(pointnum) || pointnum < 3) {
+        alert("種花點數至少要 3");
+        return;
+    }
+
+    if (isNaN(radius) || radius <= 0) {
+        alert("半徑需為正數");
+        return;
+    }
+}
+if (circleMode && !isNaN(radius) && radius > 0) {
+
+    let newPoints = [];
+
+    uniquePoints.forEach(p => {
+        let lat = parseFloat(p.lat);
+        let lon = parseFloat(p.lon);
+
+        let circle = generatePentagon(lat, lon, radius,pointnum);
+
+        circle.forEach((pt, idx) => {
+            newPoints.push({
+                lat: pt.lat,
+                lon: pt.lon,
+                name: p.name ? `${p.name}_${idx+1}` : ""
+            });
+        });
+    });
+
+    uniquePoints = newPoints;
+}
 	let duplicateCount = result.duplicateCount;
 	let finalCount = uniquePoints.length;
 
