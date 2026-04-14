@@ -81,17 +81,18 @@ input[type="text"] {
 <label class="text">
   種花半徑（公尺，例如：30）
  </label>
-<input type="text" id="pointnum" placeholder="種花路徑點數量（例如：5）" value="5">
+<input type="text" id="pointnum" placeholder="種花路徑點數量（例如：6）" value="6">
 <label class="text">
-  種花路徑點數量（例如：5）
+  種花路徑點數量（例如：6）
  </label>
 <textarea id="inputText" placeholder="支援的座標格式：
 1. 24.123,121.456 路徑點名稱
-2. 24.123,121.456 (換行)路徑點名稱
-3. (24.123,121.456)
-4. 北24.123° 東121.456°
-5. 24.123° N, 121.456° E
-6. 其他GPX格式，可直接讀檔"></textarea><br>
+2. 24.123,121.456 (換行)路徑點名稱 
+3. 路徑點名稱(換行)24.123,121.456
+4. (24.123,121.456)
+5. 北24.123° 東121.456°
+6. 24.123° N, 121.456° E
+7. 其他GPX格式，可直接讀檔"></textarea><br>
 
 <button onclick="convert()">轉換並下載</button>
 <button onclick="reviewmap()">預覽路徑</button>
@@ -306,14 +307,21 @@ function reviewmap(){
                 }
             }
 
-            if (lat !== null && lon !== null) {
-                if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
-                    name = lines[i + 1].trim();
-                    i++;
-                }
+          if (lat !== null && lon !== null) {
 
-                points.push({ lat, lon, name });
-            }
+			// ✅ 新增：名稱在「前一行」
+			if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
+				name = lines[i - 1].trim();
+			}
+
+			// 原本：名稱在「下一行」
+			if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
+				name = lines[i + 1].trim();
+				i++;
+			}
+
+			points.push({ lat, lon, name });
+}
         }
     }
 
@@ -441,14 +449,21 @@ function convert() {
                 }
             }
 
-            if (lat !== null && lon !== null) {
-                if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
-                    name = lines[i + 1].trim();
-                    i++;
-                }
+          if (lat !== null && lon !== null) {
 
-                points.push({ lat, lon, name });
-            }
+    // ✅ 新增：名稱在「前一行」
+    if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
+        name = lines[i - 1].trim();
+    }
+
+    // 原本：名稱在「下一行」
+    if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
+        name = lines[i + 1].trim();
+        i++;
+    }
+
+    points.push({ lat, lon, name });
+}
         }
     }
 
