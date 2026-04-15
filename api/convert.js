@@ -4,7 +4,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        // ✅ 修正：兼容 iPhone 捷徑（可能是字串或物件）
+        // ✅ 相容 iPhone 捷徑（可能是字串或物件）
         const body = typeof req.body === "string"
             ? JSON.parse(req.body)
             : req.body || {};
@@ -132,11 +132,22 @@ export default async function handler(req, res) {
 
         gpx += `</gpx>`;
 
-        // ✅ 關鍵：讓 iPhone 正確辨識下載
+        // ===== 檔名安全處理（避免 header error）=====
+        function safeFilename(name) {
+            return name
+                .toString()
+                .replace(/[^\w\d-_]/g, "_")
+                .replace(/_+/g, "_")
+                .substring(0, 50) || "converted";
+        }
+
+        const safeName = safeFilename(filename);
+
+        // ===== 回傳 =====
         res.setHeader("Content-Type", "application/xml");
         res.setHeader(
             "Content-Disposition",
-            `attachment; filename="${filename}.gpx"`
+            `attachment; filename="${safeName}.gpx"`
         );
 
         return res.status(200).send(gpx);
