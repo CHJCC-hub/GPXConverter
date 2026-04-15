@@ -10,7 +10,7 @@ export default async function handler(req, res) {
             return res.status(400).send("No input text");
         }
 
-        // ✅ 修正1：轉型（超重要）
+        // ===== 型別修正 =====
         circleMode = (circleMode === true || circleMode === "true");
         radius = Number(radius);
         pointnum = Number(pointnum);
@@ -21,7 +21,11 @@ export default async function handler(req, res) {
         if (text.trim().startsWith("<")) {
             const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
             matches.forEach(m => {
-                points.push({ lat: m[1], lon: m[2], name: "" });
+                points.push({
+                    lat: parseFloat(m[1]),
+                    lon: parseFloat(m[2]),
+                    name: ""
+                });
             });
         } else {
             let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
@@ -30,8 +34,8 @@ export default async function handler(req, res) {
                 let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
                 if (match) {
                     points.push({
-                        lat: match[1],
-                        lon: match[2],
+                        lat: parseFloat(match[1]),
+                        lon: parseFloat(match[2]),
                         name: match[3] || ""
                     });
                 }
@@ -62,13 +66,12 @@ export default async function handler(req, res) {
             return result;
         }
 
-        // ✅ 修正2：確保真的只有 true 才執行
         if (circleMode === true && radius > 0 && pointnum >= 3) {
             let newPoints = [];
 
             points.forEach(p => {
-                let lat = parseFloat(p.lat);
-                let lon = parseFloat(p.lon);
+                let lat = Number(p.lat);
+                let lon = Number(p.lon);
 
                 let circle = generateCircle(lat, lon, radius, pointnum);
 
@@ -99,14 +102,20 @@ export default async function handler(req, res) {
 
         gpx += `</gpx>`;
 
-        // ✅ 修正3：避免 iPhone header 爆炸（重點）
-        const safeFilename = (filename || "converted")
-            .replace(/[^\w\-]/g, "_");
+        // ===== 檔名處理（支援中文 + emoji）=====
+        let finalName = filename || "converted";
+
+        // fallback（給舊系統）
+        const asciiName = finalName.replace(/[^\x20-\x7E]/g, "_");
+
+        // UTF-8 encode（重點）
+        const encodedName = encodeURIComponent(finalName);
 
         res.setHeader("Content-Type", "application/xml");
+
         res.setHeader(
             "Content-Disposition",
-            `attachment; filename="${safeFilename}.gpx"`
+            `attachment; filename="${asciiName}.gpx"; filename*=UTF-8''${encodedName}.gpx`
         );
 
         res.status(200).send(gpx);
