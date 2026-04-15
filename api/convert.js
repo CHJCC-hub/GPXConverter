@@ -154,7 +154,7 @@ export default async function handler(req, res) {
 
         // ===== 生成 GPX =====
         let gpx = `<?xml version="1.0" encoding="utf-8"?>
-<gpx version="1.1" creator="JCC" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="By JCC" xmlns="http://www.topografix.com/GPX/1/1">
 `;
 
         points.forEach(p => {
