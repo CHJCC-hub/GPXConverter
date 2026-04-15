@@ -16,111 +16,107 @@ export default async function handler(req, res) {
         pointnum = Number(pointnum);
 
         let points = [];
-        let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-
-        // ===== 座標解析 =====
-        function parseLatLon(str) {
-            str = str.replace(/[()]/g, "");
-
-            // 一般格式
-            let basic = str.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
-            if (basic) {
-                return {
-                    lat: parseFloat(basic[1]),
-                    lon: parseFloat(basic[2])
-                };
-            }
-
-            // 中文（含南西）
-            let zh = str.match(/([北南])\s*(\d+(?:\.\d+)?)°?\s*([東西])\s*(\d+(?:\.\d+)?)°?/);
-            if (zh) {
-                let lat = parseFloat(zh[2]);
-                let lon = parseFloat(zh[4]);
-
-                if (zh[1] === "南") lat *= -1;
-                if (zh[3] === "西") lon *= -1;
-
-                return { lat, lon };
-            }
-
-            // 英文（含 S W）
-            let en = str.match(/(\d+(?:\.\d+)?)°?\s*([NnSs])\s*,\s*(\d+(?:\.\d+)?)°?\s*([EeWw])/);
-            if (en) {
-                let lat = parseFloat(en[1]);
-                let lon = parseFloat(en[3]);
-
-                if (en[2].toUpperCase() === "S") lat *= -1;
-                if (en[4].toUpperCase() === "W") lon *= -1;
-
-                return { lat, lon };
-            }
-
-            return null;
-        }
 
         // ===== GPX 解析 =====
         if (text.trim().startsWith("<")) {
             const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
             matches.forEach(m => {
-                let lat = parseFloat(m[1]);
-                let lon = parseFloat(m[2]);
-
-                if (!isNaN(lat) && !isNaN(lon)) {
-                    points.push({ lat, lon, name: "" });
-                }
+                points.push({
+                    lat: parseFloat(m[1]),
+                    lon: parseFloat(m[2]),
+                    name: ""
+                });
             });
         } else {
+
+            let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+
             for (let i = 0; i < lines.length; i++) {
-                let current = lines[i];
-                let next = lines[i + 1];
+                let line = lines[i];
 
-                let coord = parseLatLon(current);
+                let lat = null, lon = null, name = "";
 
-                if (coord) {
-                    let name = "";
+                // ===== 格式1：24.123,121.456 名稱 =====
+                let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
+                if (match) {
+                    lat = parseFloat(match[1]);
+                    lon = parseFloat(match[2]);
+                    name = match[3] ? match[3].trim() : "";
+                }
 
-                    // 同行名稱（更安全）
-                    let parts = current.split(",");
-                    if (parts.length > 2) {
-                        name = parts.slice(2).join(",").trim();
-                    }
-
-                    // 下一行名稱
-                    else if (next && !parseLatLon(next)) {
-                        name = next;
-                        i++;
-                    }
-
-                    if (!isNaN(coord.lat) && !isNaN(coord.lon)) {
-                        points.push({
-                            lat: coord.lat,
-                            lon: coord.lon,
-                            name
-                        });
-                    }
-
-                } else if (next) {
-                    // 名稱在前
-                    let coordNext = parseLatLon(next);
-                    if (coordNext && !isNaN(coordNext.lat) && !isNaN(coordNext.lon)) {
-                        points.push({
-                            lat: coordNext.lat,
-                            lon: coordNext.lon,
-                            name: current
-                        });
-                        i++;
+                // ===== 格式2：(24.123,121.456) =====
+                if (lat === null) {
+                    let match2 = line.match(/^\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?(?:\s+(.*))?/);
+                    if (match2) {
+                        lat = parseFloat(match2[1]);
+                        lon = parseFloat(match2[2]);
+                        name = match2[3] ? match2[3].trim() : "";
                     }
                 }
+
+                // ===== 格式3：北24 東121 =====
+                if (lat === null) {
+                    let match3 = line.match(/([北南])\s*(\d+(?:\.\d+)?)°?\s*([東西])\s*(\d+(?:\.\d+)?)°?(?:\s+(.*))?/);
+                    if (match3) {
+                        let latVal = parseFloat(match3[2]);
+                        let lonVal = parseFloat(match3[4]);
+
+                        lat = (match3[1] === "南") ? -latVal : latVal;
+                        lon = (match3[3] === "西") ? -lonVal : lonVal;
+
+                        name = match3[5] ? match3[5].trim() : "";
+                    }
+                }
+
+                // ===== 格式4：24° N, 121° E =====
+                if (lat === null) {
+                    let match4 = line.match(/(\d+(?:\.\d+)?)°?\s*([NS])\s*,\s*(\d+(?:\.\d+)?)°?\s*([EW])(?:\s+(.*))?/i);
+                    if (match4) {
+                        let latVal = parseFloat(match4[1]);
+                        let lonVal = parseFloat(match4[3]);
+
+                        lat = (match4[2].toUpperCase() === "S") ? -latVal : latVal;
+                        lon = (match4[4].toUpperCase() === "W") ? -lonVal : lonVal;
+
+                        name = match4[5] ? match4[5].trim() : "";
+                    }
+                }
+
+                // ===== 名稱在前一行 =====
+                if (lat !== null && lon !== null) {
+
+                    if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
+                        name = lines[i - 1];
+                    }
+
+                    // ===== 名稱在下一行 =====
+                    if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
+                        name = lines[i + 1];
+                        i++;
+                    }
+
+                    points.push({
+                        lat,
+                        lon,
+                        name
+                    });
+                }
             }
+        }
+
+        // ===== 防呆 =====
+        if (points.length === 0) {
+            return res.status(400).send("No valid coordinates");
         }
 
         // ===== 種花模式 =====
         function generateCircle(lat, lon, radius, pointnum) {
             let result = [];
+            let startAngle = -90;
             let angleStep = 360 / pointnum;
 
             for (let i = 0; i < pointnum; i++) {
-                let angle = (i * angleStep) * Math.PI / 180;
+                let angle = (startAngle + i * angleStep) * Math.PI / 180;
 
                 let dx = radius * Math.cos(angle);
                 let dy = radius * Math.sin(angle);
@@ -129,8 +125,8 @@ export default async function handler(req, res) {
                 let newLon = lon + (dx / (111320 * Math.cos(lat * Math.PI / 180)));
 
                 result.push({
-                    lat: newLat.toFixed(8),
-                    lon: newLon.toFixed(8)
+                    lat: Number(newLat.toFixed(8)),
+                    lon: Number(newLon.toFixed(8))
                 });
             }
 
@@ -158,21 +154,25 @@ export default async function handler(req, res) {
 
         // ===== 生成 GPX =====
         let gpx = `<?xml version="1.0" encoding="utf-8"?>
-<gpx version="1.1" creator="By JCC" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="JCC" xmlns="http://www.topografix.com/GPX/1/1">
 `;
 
         points.forEach(p => {
             gpx += `<wpt lat="${p.lat}" lon="${p.lon}">\n`;
+
             if (p.name) {
-                gpx += `<name><![CDATA[${p.name}]]></name>\n`;
+                let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
+                gpx += `<name><![CDATA[${safeName}]]></name>\n`;
             }
+
             gpx += `</wpt>\n`;
         });
 
         gpx += `</gpx>`;
 
-        // ===== 檔名處理 =====
+        // ===== 檔名處理（完全修正）=====
         let finalName = filename || "converted";
+
         const asciiName = finalName.replace(/[^\x20-\x7E]/g, "_");
         const encodedName = encodeURIComponent(finalName);
 
