@@ -15,77 +15,98 @@ export default async function handler(req, res) {
         radius = Number(radius);
         pointnum = Number(pointnum);
 
-        let points = [];
 
-        // ===== 解析 =====
-        if (text.trim().startsWith("<")) {
-            const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
-            matches.forEach(m => {
+// ===== 超強解析器（支援多格式）=====
+let points = [];
+let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+
+function parseLatLon(str) {
+    // 移除括號
+    str = str.replace(/[()]/g, "");
+
+    // ===== 格式1：一般 24.123,121.456 =====
+    let basic = str.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (basic) {
+        return {
+            lat: parseFloat(basic[1]),
+            lon: parseFloat(basic[2])
+        };
+    }
+
+    // ===== 格式2：中文 北xx 東xx =====
+    let zh = str.match(/北\s*(\d+(?:\.\d+)?)°?\s*東\s*(\d+(?:\.\d+)?)°?/);
+    if (zh) {
+        return {
+            lat: parseFloat(zh[1]),
+            lon: parseFloat(zh[2])
+        };
+    }
+
+    // ===== 格式3：英文 xx° N, xx° E =====
+    let en = str.match(/(\d+(?:\.\d+)?)°?\s*[Nn]\s*,\s*(\d+(?:\.\d+)?)°?\s*[Ee]/);
+    if (en) {
+        return {
+            lat: parseFloat(en[1]),
+            lon: parseFloat(en[2])
+        };
+    }
+
+    return null;
+}
+
+// ===== GPX 解析 =====
+if (text.trim().startsWith("<")) {
+    const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
+    matches.forEach(m => {
+        points.push({
+            lat: parseFloat(m[1]),
+            lon: parseFloat(m[2]),
+            name: ""
+        });
+    });
+} else {
+
+    for (let i = 0; i < lines.length; i++) {
+        let current = lines[i];
+        let next = lines[i + 1];
+
+        let coord = parseLatLon(current);
+
+        if (coord) {
+            let name = "";
+
+            // 情境1：同一行有名稱
+            let extra = current.replace(/.*?,.*?/, "").trim();
+            if (extra && !parseLatLon(extra)) {
+                name = extra;
+            }
+
+            // 情境2：下一行是名稱
+            else if (next && !parseLatLon(next)) {
+                name = next;
+                i++; // 跳過下一行
+            }
+
+            points.push({
+                lat: coord.lat,
+                lon: coord.lon,
+                name
+            });
+
+        } else if (next) {
+            // 情境3：名稱在前
+            let coordNext = parseLatLon(next);
+            if (coordNext) {
                 points.push({
-                    lat: parseFloat(m[1]),
-                    lon: parseFloat(m[2]),
-                    name: ""
+                    lat: coordNext.lat,
+                    lon: coordNext.lon,
+                    name: current
                 });
-            });
-        } else {
-            let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-
-            for (let line of lines) {
-                let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
-                if (match) {
-                    points.push({
-                        lat: parseFloat(match[1]),
-                        lon: parseFloat(match[2]),
-                        name: match[3] || ""
-                    });
-                }
+                i++;
             }
         }
-
-        // ===== 種花模式 =====
-        function generateCircle(lat, lon, radius, pointnum) {
-            let result = [];
-            let angleStep = 360 / pointnum;
-
-            for (let i = 0; i < pointnum; i++) {
-                let angle = (i * angleStep) * Math.PI / 180;
-
-                let dx = radius * Math.cos(angle);
-                let dy = radius * Math.sin(angle);
-
-                let newLat = lat + (dy / 111320);
-                let newLon = lon + (dx / (111320 * Math.cos(lat * Math.PI / 180)));
-
-                result.push({
-                    lat: newLat.toFixed(8),
-                    lon: newLon.toFixed(8)
-                });
-            }
-
-            result.push(result[0]);
-            return result;
-        }
-
-        if (circleMode === true && radius > 0 && pointnum >= 3) {
-            let newPoints = [];
-
-            points.forEach(p => {
-                let lat = Number(p.lat);
-                let lon = Number(p.lon);
-
-                let circle = generateCircle(lat, lon, radius, pointnum);
-
-                circle.forEach((pt, idx) => {
-                    newPoints.push({
-                        lat: pt.lat,
-                        lon: pt.lon,
-                        name: p.name ? `${p.name}_${idx + 1}` : ""
-                    });
-                });
-            });
-
-            points = newPoints;
-        }
+    }
+}
 
         // ===== 生成 GPX =====
         let gpx = `<?xml version="1.0" encoding="utf-8"?>
