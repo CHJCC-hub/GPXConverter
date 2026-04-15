@@ -4,80 +4,47 @@ export default async function handler(req, res) {
     }
 
     try {
-        // ✅ 相容 iPhone 捷徑（可能是字串或物件）
-        const body = typeof req.body === "string"
-            ? JSON.parse(req.body)
-            : req.body || {};
-
-        const {
-            text,
-            filename = "converted",
-            circleMode = false,
-            radius = 30,
-            pointnum = 6
-        } = body;
+        let { text, filename, circleMode, radius, pointnum } = req.body;
 
         if (!text) {
             return res.status(400).send("No input text");
         }
 
+        // ✅ 修正1：轉型（超重要）
+        circleMode = (circleMode === true || circleMode === "true");
+        radius = Number(radius);
+        pointnum = Number(pointnum);
+
         let points = [];
 
-        // ===== GPX 解析 =====
+        // ===== 解析 =====
         if (text.trim().startsWith("<")) {
             const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
             matches.forEach(m => {
-                points.push({
-                    lat: m[1],
-                    lon: m[2],
-                    name: ""
-                });
+                points.push({ lat: m[1], lon: m[2], name: "" });
             });
         } else {
             let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
 
-            for (let i = 0; i < lines.length; i++) {
-                let line = lines[i];
-
-                let lat = null, lon = null, name = "";
-
+            for (let line of lines) {
                 let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
                 if (match) {
-                    lat = match[1];
-                    lon = match[2];
-                    name = match[3] || "";
-                }
-
-                if (lat !== null && lon !== null) {
-
-                    // 名稱在前一行
-                    if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
-                        name = lines[i - 1];
-                    }
-
-                    // 名稱在下一行
-                    if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
-                        name = lines[i + 1];
-                        i++;
-                    }
-
-                    points.push({ lat, lon, name });
+                    points.push({
+                        lat: match[1],
+                        lon: match[2],
+                        name: match[3] || ""
+                    });
                 }
             }
-        }
-
-        if (points.length === 0) {
-            return res.status(400).send("No valid coordinates");
         }
 
         // ===== 種花模式 =====
         function generateCircle(lat, lon, radius, pointnum) {
             let result = [];
-            let startAngle = -90;
             let angleStep = 360 / pointnum;
 
             for (let i = 0; i < pointnum; i++) {
-                let angle = (startAngle + i * angleStep) * Math.PI / 180;
+                let angle = (i * angleStep) * Math.PI / 180;
 
                 let dx = radius * Math.cos(angle);
                 let dy = radius * Math.sin(angle);
@@ -95,7 +62,8 @@ export default async function handler(req, res) {
             return result;
         }
 
-        if (circleMode && radius > 0 && pointnum >= 3) {
+        // ✅ 修正2：確保真的只有 true 才執行
+        if (circleMode === true && radius > 0 && pointnum >= 3) {
             let newPoints = [];
 
             points.forEach(p => {
@@ -124,36 +92,26 @@ export default async function handler(req, res) {
         points.forEach(p => {
             gpx += `<wpt lat="${p.lat}" lon="${p.lon}">\n`;
             if (p.name) {
-                let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
-                gpx += `<name><![CDATA[${safeName}]]></name>\n`;
+                gpx += `<name><![CDATA[${p.name}]]></name>\n`;
             }
             gpx += `</wpt>\n`;
         });
 
         gpx += `</gpx>`;
 
-        // ===== 檔名安全處理（避免 header error）=====
-        function safeFilename(name) {
-            return name
-                .toString()
-                .replace(/[^\w\d-_]/g, "_")
-                .replace(/_+/g, "_")
-                .substring(0, 50) || "converted";
-        }
+        // ✅ 修正3：避免 iPhone header 爆炸（重點）
+        const safeFilename = (filename || "converted")
+            .replace(/[^\w\-]/g, "_");
 
-        const safeName = safeFilename(filename);
-
-        // ===== 回傳 =====
         res.setHeader("Content-Type", "application/xml");
         res.setHeader(
             "Content-Disposition",
-            `attachment; filename="${safeName}.gpx"`
+            `attachment; filename="${safeFilename}.gpx"`
         );
 
-        return res.status(200).send(gpx);
+        res.status(200).send(gpx);
 
     } catch (err) {
-        console.error("API Error:", err);
-        return res.status(500).send("Server Error: " + err.message);
+        res.status(500).send("Server Error: " + err.message);
     }
 }
