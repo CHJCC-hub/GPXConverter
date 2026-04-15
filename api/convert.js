@@ -4,7 +4,18 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { text, filename, circleMode, radius, pointnum } = req.body;
+        // ✅ 修正：兼容 iPhone 捷徑（可能是字串或物件）
+        const body = typeof req.body === "string"
+            ? JSON.parse(req.body)
+            : req.body || {};
+
+        const {
+            text,
+            filename = "converted",
+            circleMode = false,
+            radius = 30,
+            pointnum = 6
+        } = body;
 
         if (!text) {
             return res.status(400).send("No input text");
@@ -12,11 +23,15 @@ export default async function handler(req, res) {
 
         let points = [];
 
-        // ===== 解析邏輯（沿用你的）=====
+        // ===== GPX 解析 =====
         if (text.trim().startsWith("<")) {
             const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
             matches.forEach(m => {
-                points.push({ lat: m[1], lon: m[2], name: "" });
+                points.push({
+                    lat: m[1],
+                    lon: m[2],
+                    name: ""
+                });
             });
         } else {
             let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
@@ -24,25 +39,45 @@ export default async function handler(req, res) {
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i];
 
+                let lat = null, lon = null, name = "";
+
                 let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
                 if (match) {
-                    let name = match[3] || "";
-                    points.push({
-                        lat: match[1],
-                        lon: match[2],
-                        name
-                    });
+                    lat = match[1];
+                    lon = match[2];
+                    name = match[3] || "";
+                }
+
+                if (lat !== null && lon !== null) {
+
+                    // 名稱在前一行
+                    if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
+                        name = lines[i - 1];
+                    }
+
+                    // 名稱在下一行
+                    if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
+                        name = lines[i + 1];
+                        i++;
+                    }
+
+                    points.push({ lat, lon, name });
                 }
             }
+        }
+
+        if (points.length === 0) {
+            return res.status(400).send("No valid coordinates");
         }
 
         // ===== 種花模式 =====
         function generateCircle(lat, lon, radius, pointnum) {
             let result = [];
+            let startAngle = -90;
             let angleStep = 360 / pointnum;
 
             for (let i = 0; i < pointnum; i++) {
-                let angle = (i * angleStep) * Math.PI / 180;
+                let angle = (startAngle + i * angleStep) * Math.PI / 180;
 
                 let dx = radius * Math.cos(angle);
                 let dy = radius * Math.sin(angle);
@@ -73,7 +108,7 @@ export default async function handler(req, res) {
                     newPoints.push({
                         lat: pt.lat,
                         lon: pt.lon,
-                        name: p.name ? `${p.name}_${idx+1}` : ""
+                        name: p.name ? `${p.name}_${idx + 1}` : ""
                     });
                 });
             });
@@ -89,22 +124,25 @@ export default async function handler(req, res) {
         points.forEach(p => {
             gpx += `<wpt lat="${p.lat}" lon="${p.lon}">\n`;
             if (p.name) {
-                gpx += `<name><![CDATA[${p.name}]]></name>\n`;
+                let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
+                gpx += `<name><![CDATA[${safeName}]]></name>\n`;
             }
             gpx += `</wpt>\n`;
         });
 
         gpx += `</gpx>`;
 
+        // ✅ 關鍵：讓 iPhone 正確辨識下載
         res.setHeader("Content-Type", "application/xml");
         res.setHeader(
             "Content-Disposition",
-            `attachment; filename="${filename || "converted"}.gpx"`
+            `attachment; filename="${filename}.gpx"`
         );
 
-        res.status(200).send(gpx);
+        return res.status(200).send(gpx);
 
     } catch (err) {
-        res.status(500).send("Server Error");
+        console.error("API Error:", err);
+        return res.status(500).send("Server Error: " + err.message);
     }
 }
