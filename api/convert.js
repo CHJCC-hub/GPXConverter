@@ -78,16 +78,27 @@ export default async function handler(req, res) {
         }
 
         // ===== GPX =====
-        if (text.trim().startsWith("<")) {
-            const matches = [...text.matchAll(/lat="([^"]+)" lon="([^"]+)"/g)];
-            matches.forEach(m => {
-                points.push({
-                    lat: parseFloat(m[1]),
-                    lon: parseFloat(m[2]),
-                    name: ""
-                });
-            });
-        } else {
+        if (text.includes("<gpx")) {
+
+    // 抓所有點（trkpt / rtept / wpt）
+const matches = [...text.matchAll(
+/<(trkpt|rtept|wpt)[^>]*lat="([^"]+)" lon="([^"]+)"[^>]*>([\s\S]*?)<\/\1>|<(trkpt|rtept|wpt)[^>]*lat="([^"]+)" lon="([^"]+)"[^>]*\/>/g
+)];
+
+matches.forEach(m => {
+    let lat = parseFloat(m[2] || m[6]);
+    let lon = parseFloat(m[3] || m[7]);
+	  // 🔥 防呆（建議加）
+    if (isNaN(lat) || isNaN(lon)) return;
+    let inner = m[4] || "";
+
+let nameMatch = inner.match(/<name>(?:<!\[CDATA\[(.*?)\]\]>|(.*?))<\/name>/);
+let name = nameMatch ? (nameMatch[1] || nameMatch[2] || "").trim() : "";
+
+    points.push({ lat, lon, name });
+});
+}
+		else {
             for (let i = 0; i < lines.length; i++) {
                 let current = lines[i];
                 let next = lines[i + 1];
@@ -96,10 +107,13 @@ export default async function handler(req, res) {
 
                 if (coord) {
                     let name = "";
-
+					// ✅ 名稱在前一行（補上）
+					if (!name && i > 0 && !parseLatLon(lines[i - 1])) {
+						name = lines[i - 1].trim();
+					}
                     // 同行名稱
-                    let extra = current.replace(/.*?,.*?/, "").trim();
-                    if (extra && !parseLatLon(extra)) {
+					let extra = current.replace(/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/, "").trim();
+                    if (extra && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(extra))
                         name = extra;
                     }
 
@@ -141,11 +155,13 @@ export default async function handler(req, res) {
                 let circle = generateCircle(p.lat, p.lon, radius, pointnum);
 
                 circle.forEach((pt, idx) => {
-                    finalPoints.push({
-                        lat: pt.lat,
-                        lon: pt.lon,
-                        name: p.name ? `${p.name}_${idx + 1}` : ""
-                    });
+				finalPoints.push({
+					lat: pt.lat,
+					lon: pt.lon,
+					name: (p.name && p.name.trim() !== "") 
+						? `${p.name.trim()}_${idx + 1}` 
+						: null
+					});
                 });
             });
         } else {
@@ -160,10 +176,10 @@ export default async function handler(req, res) {
         finalPoints.forEach(p => {
             gpx += `<wpt lat="${p.lat}" lon="${p.lon}">\n`;
 
-            if (p.name) {
-                let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
-                gpx += `<name><![CDATA[${safeName}]]></name>\n`;
-            }
+			if (p.name && p.name.trim() !== "") {
+				let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
+				gpx += `<name><![CDATA[${safeName}]]></name>\n`;
+			}
 
             gpx += `</wpt>\n`;
         });
