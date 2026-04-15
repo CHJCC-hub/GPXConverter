@@ -598,8 +598,81 @@ document.getElementById("stats").innerHTML =
     let a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = finalName + ".gpx";
+	a.target = "_blank";
     a.click();
 }
+// ===== API轉換（給捷徑用）=====
+async function convertByAPI() {
+    let text = document.getElementById("inputText").value.trim();
+    if (!text) return;
+
+    let inputName = document.getElementById("fileNameInput").value.trim();
+
+    let finalName = "";
+    if (inputName) {
+        finalName = inputName;
+    } else if (originalFileName) {
+        finalName = originalFileName + "_convert";
+    } else {
+        finalName = "converted";
+    }
+
+    let res = await fetch("/api/convert", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            text: text,
+            filename: finalName,
+            circleMode: document.getElementById("circleMode")?.checked,
+            radius: parseFloat(document.getElementById("radiusInput")?.value),
+            pointnum: parseFloat(document.getElementById("pointnum")?.value)
+        })
+    });
+
+    if (!res.ok) {
+        alert("API錯誤");
+        return;
+    }
+
+    let blob = await res.blob();
+
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = finalName + ".gpx";
+    a.target = "_blank"; // iPhone 修正
+    a.click();
+}
+// ===== 捷徑專用入口 =====
+window.addEventListener("load", async () => {
+    const params = new URLSearchParams(window.location.search);
+
+    let auto = params.get("auto");
+    let data = params.get("data");
+
+    //  1. URL帶資料（少量）
+    if (data) {
+        document.getElementById("inputText").value = decodeURIComponent(data);
+    }
+
+    //  2. Clipboard（大量資料）
+    if (!data && auto === "1") {
+        try {
+            const clip = await navigator.clipboard.readText();
+            if (clip) {
+                document.getElementById("inputText").value = clip;
+            }
+        } catch (e) {}
+    }
+
+    //  3. 自動轉換（只給捷徑用）
+    if (auto === "1") {
+        setTimeout(() => {
+            convertByAPI(); // ⚡ 不用原本 convert()
+        }, 500);
+    }
+});
 </script>
 
 </body>
