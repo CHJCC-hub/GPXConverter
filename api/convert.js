@@ -177,7 +177,7 @@ if (coord) {
         finalPoints.forEach(p => {
             gpx += `<wpt lat="${p.lat}" lon="${p.lon}">\n`;
 
-			  if (p.name) {
+			  if (p.name && p.name.trim() !== "") {
             let safeName = p.name.replace(/]]>/g, "]]]]><![CDATA[>");
             gpx += `    <name><![CDATA[${safeName}]]></name>
 `;
