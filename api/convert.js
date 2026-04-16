@@ -115,7 +115,11 @@ if (coord) {
 
     // 同行名稱
     let extra = current.replace(/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/, "").trim();
-    if (extra && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(extra)) {
+    // 🔥 如果整行本來就是座標 → 不當名稱
+	if (parseLatLon(current)) {
+		extra = "";
+	}
+	if (extra && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(extra)) {
         name = extra;
     }
 
