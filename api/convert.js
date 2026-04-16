@@ -108,26 +108,38 @@ let name = nameMatch ? (nameMatch[1] || nameMatch[2] || "").trim() : "";
 if (coord) {
     let name = "";
 
-    // 前一行名稱
-    if (!name && i > 0 && !parseLatLon(lines[i - 1])) {
-        name = lines[i - 1].trim();
-    }
+   // 前一行名稱
+if (!name && i > 0 && !parseLatLon(lines[i - 1])) {
+    name = lines[i - 1].trim();
+}
 
-    // 同行名稱
-    let extra = current.replace(/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/, "").trim();
-    // 🔥 如果整行本來就是座標 → 不當名稱
-	if (parseLatLon(current)) {
-		extra = "";
-	}
-	if (extra && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(extra)) {
-        name = extra;
-    }
+// ===== 同行名稱 =====
+let extra = current
+    // 移除「數字,數字」開頭
+    .replace(/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/, "")
+    // 移除「中文座標」開頭
+    .replace(/^[北南]\s*\d+(?:\.\d+)?°?\s*[東西]\s*\d+(?:\.\d+)?°?/, "")
+    // 移除「英文座標」開頭
+    .replace(/^\d+(?:\.\d+)?°?\s*[NS]\s*,\s*\d+(?:\.\d+)?°?\s*[EW]/i, "")
+    .trim();
 
-    // 下一行名稱（🔥要在同一個 if 裡）
-    else if (next && !parseLatLon(next)) {
-        name = next;
-        i++;
-    }
+// 🔥 判斷「整行是否純座標」
+let isPureCoord =
+    /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(current) ||
+    /^\(?\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)?$/.test(current) ||
+    /^[北南]\s*\d+(?:\.\d+)?°?\s*[東西]\s*\d+(?:\.\d+)?°?$/.test(current) ||
+    /^\d+(?:\.\d+)?°?\s*[NS]\s*,\s*\d+(?:\.\d+)?°?\s*[EW]$/i.test(current);
+
+// 👉 只有「不是純座標」才當名稱
+if (!isPureCoord && extra) {
+    name = extra;
+}
+
+// ===== 下一行名稱 =====
+else if (!name && next && !parseLatLon(next)) {
+    name = next;
+    i++;
+}
 
     points.push({
         lat: coord.lat,
