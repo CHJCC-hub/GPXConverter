@@ -105,31 +105,32 @@ let name = nameMatch ? (nameMatch[1] || nameMatch[2] || "").trim() : "";
 
                 let coord = parseLatLon(current);
 
-                if (coord) {
-                    let name = "";
-					// ✅ 名稱在前一行（補上）
-					if (!name && i > 0 && !parseLatLon(lines[i - 1])) {
-						name = lines[i - 1].trim();
-					}
-                    // 同行名稱
-					let extra = current.replace(/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/, "").trim();
-                    if (extra && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(extra))
-                        name = extra;
-                    }
+if (coord) {
+    let name = "";
 
-                    // 下一行名稱
-                    else if (next && !parseLatLon(next)) {
-                        name = next;
-                        i++;
-                    }
+    // 前一行名稱
+    if (!name && i > 0 && !parseLatLon(lines[i - 1])) {
+        name = lines[i - 1].trim();
+    }
 
-                    points.push({
-                        lat: coord.lat,
-                        lon: coord.lon,
-                        name
-                    });
+    // 同行名稱
+    let extra = current.replace(/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?/, "").trim();
+    if (extra && !/^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(extra)) {
+        name = extra;
+    }
 
-                } else if (next) {
+    // 下一行名稱（🔥要在同一個 if 裡）
+    else if (next && !parseLatLon(next)) {
+        name = next;
+        i++;
+    }
+
+    points.push({
+        lat: coord.lat,
+        lon: coord.lon,
+        name
+    });
+} else if (next) {
                     let coordNext = parseLatLon(next);
                     if (coordNext) {
                         points.push({
