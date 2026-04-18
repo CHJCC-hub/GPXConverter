@@ -184,7 +184,8 @@ else if (!name && next && !parseLatLon(next)) {
         } else {
             finalPoints = points;
         }
-
+let { unique, duplicateCount } = removeDuplicate(finalPoints);
+finalPoints = unique;
         // ===== GPX輸出 =====
         let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="By JCC" xmlns="http://www.topografix.com/GPX/1/1">
@@ -220,4 +221,27 @@ else if (!name && next && !parseLatLon(next)) {
     } catch (err) {
         res.status(500).send("Server Error: " + err.message);
     }
+}
+
+// ===== 去除連續重複點 =====
+function removeDuplicate(points) {
+    let duplicateCount = 0;
+
+    let unique = points.filter((p, index, arr) => {
+        if (index === 0) return true;
+
+        let prev = arr[index - 1];
+
+        let keyCurrent = `${parseFloat(p.lat).toFixed(6)},${parseFloat(p.lon).toFixed(6)}`;
+        let keyPrev = `${parseFloat(prev.lat).toFixed(6)},${parseFloat(prev.lon).toFixed(6)}`;
+
+        if (keyCurrent === keyPrev) {
+            duplicateCount++;
+            return false;
+        }
+
+        return true;
+    });
+
+    return { unique, duplicateCount };
 }
