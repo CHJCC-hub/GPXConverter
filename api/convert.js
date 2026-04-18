@@ -163,7 +163,9 @@ else if (!name && next && !parseLatLon(next)) {
         if (points.length === 0) {
             return res.status(400).send("No valid points");
         }
-
+// ===== 先去除原始重複點（🔥關鍵位置）=====
+let dedup = removeDuplicate(points);
+points = dedup.unique;
         // ===== 種花模式（🔥重點修正）=====
         let finalPoints = [];
 
@@ -184,8 +186,7 @@ else if (!name && next && !parseLatLon(next)) {
         } else {
             finalPoints = points;
         }
-let { unique, duplicateCount } = removeDuplicate(finalPoints);
-finalPoints = unique;
+
         // ===== GPX輸出 =====
         let gpx = `<?xml version="1.0" encoding="utf-8"?>
 <gpx version="1.1" creator="By JCC" xmlns="http://www.topografix.com/GPX/1/1">
