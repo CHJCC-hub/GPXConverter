@@ -24,17 +24,40 @@ textarea {
 }
 
 .file-btn {
-    display: inline-block;
-    font-size: 1.1em;
-    padding: 0.8em 1.4em;
-    border-radius: 10px;
-    background-color: #007bff;
-    color: white;
-    cursor: pointer;
-    text-align: center;
-    margin-bottom: 10px;
+  	display: inline-block;
+	padding: 12px 20px;
+	font-size: 24px;
+	font-weight: 500;
+	color: white;
+	text-decoration: none;
+	background: linear-gradient(180deg, #0a84ff, #0066ff);
+	border-radius: 14px;
+	cursor: pointer;
+	box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+	transition: all 0.2s ease;
+	position: relative;
+}
+/* hover */
+.file-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 6px 14px rgba(0,0,0,0.25);
 }
 
+/* 點擊 */
+.file-btn:active {
+	transform: scale(0.97);
+	box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+/* iOS光澤 */
+.file-btn::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: 14px;
+	background: linear-gradient(180deg, rgba(255,255,255,0.25), transparent);
+	pointer-events: none;
+}
 .file-btn input {
     display: none;
 }
@@ -56,8 +79,9 @@ input[type="text"] {
 }
 
 #fileName {
-    margin-top: 5px;
-    color: #555;
+   margin-top: 8px;
+	color: #666;
+	font-size: 0.95em;
 }
 /* iPhone 風格開關 */
 .switch {
@@ -98,18 +122,118 @@ input[type="text"] {
 
 .switch input:checked + .slider::before {
     transform: translateX(20px);
+	
+}
+ .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 0.95em;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.4s ease;
+    z-index: 9999;
+}
+
+/* 顯示狀態 */
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.toast.success { background: #28a745; }
+.toast.error { background: #dc3545; }
+.toast.warn { background: #ffc107; color:#000; }
+.toast.info {    background: #000;     color: white;  }
+.header {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 20px; padding-bottom: 14px;
+    border-bottom: 2px solid var(--border);
+  }
+ .header-text span {
+    font-size: clamp(20px, 1.5vw, 13px);
+    color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+  }
+   
+   .header-text h2 {
+    font-size: clamp(40px, 3vw, 26px);
+    font-weight: 700; color: var(--green-dark); line-height: 1.2;
+  }
+  .ios-btn {
+	display: inline-block;
+	margin-top: 10px;
+	padding: 12px 20px;
+	font-size: 16px;
+	font-weight: 500;
+	color: white;
+	background: linear-gradient(180deg, #0a84ff, #0066ff);
+	border-radius: 14px;
+	border: none;
+	cursor: pointer;
+	text-align: center;
+
+	box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+	transition: all 0.2s ease;
+	position: relative;
+}
+
+/* hover */
+.ios-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+}
+
+/* 點擊 */
+.ios-btn:active {
+	transform: scale(0.96);
+	box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+/* iOS 光澤 */
+.ios-btn::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: 14px;
+	background: linear-gradient(180deg, rgba(255,255,255,0.25), transparent);
+	pointer-events: none;
+}
+.ios-btn:focus {
+	outline: none;
+}
+/* 灰色按鈕（清空用） */
+.ios-btn-gray {
+	background: linear-gradient(180deg, #8e8e93, #6c6c70);
+}
+.ios-btn {
+	position: relative;
 }
 </style>
 
 </head>
 <body>
+<div class="header">
+	<div class="header-text">
+		<h2>GPX助手</h2>
+		<span>蘋果專用GPX助手捷徑腳本下載：</span>
+		<br>
+		<a href="https://www.icloud.com/shortcuts/d57c836a7b8d48a2917ad3f3a53264e5" 
+		   target="_blank" 
+		   class="ios-btn">
+			下載捷徑
+		</a>
+	</div>
+</div>
 
-<h2>GPX轉換器</h2>
+  <label class="file-btn">
+    選擇GPX檔案或座標文字檔
+    <input type="file" id="fileInput">
+  </label>
 
-<label class="file-btn">
-  選擇GPX檔案或座標文字檔
-  <input type="file" id="fileInput">
-</label>
 
 <div id="fileName"></div>
 <div id="stats" style="margin-top:10px;color:#333;"></div>
@@ -136,8 +260,12 @@ input[type="text"] {
 6. 24.123° N, 121.456° E
 7. 其他GPX格式，可直接讀檔"></textarea><br>
 
-<button onclick="convert()">轉換並下載</button>
-<button onclick="reviewmap()">預覽路徑</button>
+<div class="toast" id="toast"></div>
+
+<button class="ios-btn" onclick="convert()">轉換並下載</button>
+<button class="ios-btn" onclick="reviewmap()">預覽路徑</button>
+<button class="ios-btn ios-btn-gray" class="btn-select-all" onclick="clearCoords()">清空座標</button>
+   
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -146,7 +274,26 @@ input[type="text"] {
 <script>
 let originalFileName = "";
 let map, polyline;
-
+// ════════════════════════════════════════════
+// UI 工具
+// ════════════════════════════════════════════
+function showToast(msg, delay=0, type="success") {
+  setTimeout(() => {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show', type);  // 動態加入類別
+    setTimeout(() => t.classList.remove('show', type), 2400);
+  }, delay);
+}
+// ======清除
+function clearCoords() {
+  const el = document.getElementById('inputText');
+  if (!el.value.trim()) return showToast('座標是空的',0, "info");
+  el.value = '';
+  el.focus();
+  document.getElementById('inputText').classList.remove('show');
+  showToast('已清空',0, "info");
+}
 // ===== 建立地圖（不影響UI，用JS插入）=====
 function initMap() {
     if (map) return;
@@ -368,7 +515,8 @@ function reviewmap(){
     }
 
     if (points.length === 0) {
-        alert("沒有抓到任何座標！");
+	showToast("沒有抓到任何座標！", 0, "error");
+        //alert("沒有抓到任何座標！");
         return;
     }
 
@@ -387,7 +535,8 @@ function reviewmap(){
     }
 
     if (isNaN(radius) || radius <= 0) {
-        alert("半徑需為正數");
+	 showToast("半徑需為正數", 0, "error");
+        //alert("半徑需為正數");
         return;
     }
 }
@@ -510,7 +659,8 @@ function convert() {
     }
 
     if (points.length === 0) {
-        alert("沒有抓到任何座標！");
+	showToast("沒有抓到任何座標！", 0, "error");
+        //alert("沒有抓到任何座標！");
         return;
     }
 
@@ -524,12 +674,14 @@ function convert() {
 	let radius = parseFloat(document.getElementById("radiusInput")?.value);
 	if (circleMode) {
     if (isNaN(pointnum) || pointnum < 3) {
-        alert("種花點數至少要 3");
+	showToast("種花點數至少要 3", 0, "error")
+        //alert("種花點數至少要 3");
         return;
     }
 
     if (isNaN(radius) || radius <= 0) {
-        alert("半徑需為正數");
+	 showToast("半徑需為正數", 0, "error");
+        //alert("半徑需為正數");
         return;
     }
 }
@@ -600,6 +752,7 @@ document.getElementById("stats").innerHTML =
     a.download = finalName + ".gpx";
 	a.target = "_blank";
     a.click();
+	   showToast("轉換成功！下載已開始", 0, "success");
 }
 // ===== API轉換（給捷徑用）=====
 async function convertByAPI() {
