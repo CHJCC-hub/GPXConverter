@@ -211,12 +211,17 @@ points = dedup.unique;
         const asciiName = finalName.replace(/[^\x20-\x7E]/g, "_");
         const encodedName = encodeURIComponent(finalName);
 
-        res.setHeader("Content-Type", "application/xml");
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="${asciiName}.gpx"; filename*=UTF-8''${encodedName}.gpx`
-        );
-
+        //res.setHeader("Content-Type", "application/xml");
+        //res.setHeader(
+            //"Content-Disposition",
+            //`attachment; filename="${asciiName}.gpx"; //filename*=UTF-8''${encodedName}.gpx`
+        //);
+		res.setHeader("Content-Type", "application/gpx+xml");
+		res.setHeader("Content-Transfer-Encoding", "binary");
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="${asciiName}.gpx"; filename*=UTF-8''${encodedName}.gpx`
+		);
         res.status(200).send(gpx);
 
     } catch (err) {
