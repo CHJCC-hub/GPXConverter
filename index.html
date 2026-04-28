@@ -691,10 +691,15 @@ async function convertByAPI() {
     let blob = await res.blob();
 
     let a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    //a.href = URL.createObjectURL(blob);
+	let url = URL.createObjectURL(blob);
+	a.href = url;
+	
+	
     a.download = finalName + ".gpx";
     a.target = "_blank"; // iPhone 修正
     a.click();
+	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 // ===== 捷徑專用入口 =====
 window.addEventListener("load", async () => {
