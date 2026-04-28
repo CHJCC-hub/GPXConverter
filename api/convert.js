@@ -216,7 +216,7 @@ points = dedup.unique;
             //"Content-Disposition",
             //`attachment; filename="${asciiName}.gpx"; //filename*=UTF-8''${encodedName}.gpx`
         //);
-		res.setHeader("Content-Type", "application/txt");
+		res.setHeader("Content-Type", "application/gpx+xml");
 		res.setHeader("Content-Transfer-Encoding", "binary");
 		res.setHeader(
 			"Content-Disposition",
