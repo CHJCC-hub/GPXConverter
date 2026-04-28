@@ -212,6 +212,16 @@ input[type="text"] {
 .ios-btn {
 	position: relative;
 }
+.form-group {
+    margin-top: 12px;
+}
+
+.form-group label {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 4px;
+    display: block;
+}
 </style>
 
 </head>
@@ -243,14 +253,18 @@ input[type="text"] {
   <span class="slider"></span>
   種花模式(繞圈)
 </label>
+<div class="form-group">
 <input type="text" id="radiusInput" placeholder="種花半徑（公尺，例如：30）" value="30">
-<label class="text">
+<label for="radiusInput" class="text">
   種花半徑（公尺，例如：30）
  </label>
+ </div>
+ <div class="form-group">
 <input type="text" id="pointnum" placeholder="種花路徑點數量（例如：6）" value="6">
-<label class="text">
+<label for="pointnum"  class="text">
   種花路徑點數量（例如：6）
  </label>
+ </div>
 <textarea id="inputText" placeholder="支援的座標格式：
 1. 24.123,121.456 路徑點名稱
 2. 24.123,121.456 (換行)路徑點名稱 
@@ -274,6 +288,127 @@ input[type="text"] {
 <script>
 let originalFileName = "";
 let map, polyline;
+//處理解碼
+function parseInput(text) {
+    let points = [];
+
+  if (text.startsWith("<")) {
+        let xml = new DOMParser().parseFromString(text, "text/xml");
+
+        xml.querySelectorAll("trkpt, rtept, wpt").forEach(p => {
+            points.push({
+                lat: p.getAttribute("lat"),
+                lon: p.getAttribute("lon"),
+                name: ""
+            });
+        });
+
+    } else {
+        let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+
+            let lat = null, lon = null, name = "";
+
+            let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
+            if (match) {
+                lat = match[1];
+                lon = match[2];
+                name = match[3] ? match[3].trim() : "";
+            }
+
+            if (!lat) {
+                let match2 = line.match(/^\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?(?:\s+(.*))?/);
+                if (match2) {
+                    lat = match2[1];
+                    lon = match2[2];
+                    name = match2[3] ? match2[3].trim() : "";
+                }
+            }
+
+            if (!lat) {
+                let match3 = line.match(/([北南])\s*(\d+(?:\.\d+)?)°?\s*([東西])\s*(\d+(?:\.\d+)?)°?(?:\s+(.*))?/);
+                if (match3) {
+                    let latDir = match3[1];
+                    let latVal = parseFloat(match3[2]);
+                    let lonDir = match3[3];
+                    let lonVal = parseFloat(match3[4]);
+
+                    lat = (latDir === "南") ? -latVal : latVal;
+                    lon = (lonDir === "西") ? -lonVal : lonVal;
+                    name = match3[5] ? match3[5].trim() : "";
+                }
+            }
+
+            if (!lat) {
+                let match4 = line.match(/(\d+(?:\.\d+)?)°?\s*([NS])\s*,\s*(\d+(?:\.\d+)?)°?\s*([EW])(?:\s+(.*))?/i);
+                if (match4) {
+                    let latVal = parseFloat(match4[1]);
+                    let latDir = match4[2].toUpperCase();
+                    let lonVal = parseFloat(match4[3]);
+                    let lonDir = match4[4].toUpperCase();
+
+                    lat = (latDir === "S") ? -latVal : latVal;
+                    lon = (lonDir === "W") ? -lonVal : lonVal;
+                    name = match4[5] ? match4[5].trim() : "";
+                }
+            }
+
+          if (lat !== null && lon !== null) {
+
+			// ✅ 新增：名稱在「前一行」
+			if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
+				name = lines[i - 1].trim();
+			}
+
+			// 原本：名稱在「下一行」
+			if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
+				name = lines[i + 1].trim();
+				i++;
+			}
+
+			points.push({ lat, lon, name });
+}
+        }
+    }
+
+    return points;
+}
+//處理種花
+function applyCircle(points) {
+    let pointnum = parseFloat(document.getElementById("pointnum")?.value);
+    let circleMode = document.getElementById("circleMode")?.checked;
+    let radius = parseFloat(document.getElementById("radiusInput")?.value);
+
+    if (!circleMode) return points;
+
+    if (isNaN(pointnum) || pointnum < 3) {
+        showToast("種花點數至少要 3", 0, "error");
+        return null;
+    }
+
+    if (isNaN(radius) || radius <= 0) {
+        showToast("半徑需為正數", 0, "error");
+        return null;
+    }
+
+    let newPoints = [];
+
+    points.forEach(p => {
+        let circle = generatePentagon(parseFloat(p.lat), parseFloat(p.lon), radius, pointnum);
+
+        circle.forEach((pt, idx) => {
+            newPoints.push({
+                lat: pt.lat,
+                lon: pt.lon,
+                name: p.name ? `${p.name}_${idx+1}` : ""
+            });
+        });
+    });
+
+    return newPoints;
+}
 // ════════════════════════════════════════════
 // UI 工具
 // ════════════════════════════════════════════
@@ -430,91 +565,8 @@ function drawMap(points) {
 }
 function reviewmap(){
  let text = document.getElementById("inputText").value.trim();
-    let points = [];
-
-    // ===== GPX =====
-    if (text.startsWith("<")) {
-        let xml = new DOMParser().parseFromString(text, "text/xml");
-
-        xml.querySelectorAll("trkpt, rtept, wpt").forEach(p => {
-            points.push({
-                lat: p.getAttribute("lat"),
-                lon: p.getAttribute("lon"),
-                name: ""
-            });
-        });
-
-    } else {
-        let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-
-            let lat = null, lon = null, name = "";
-
-            let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
-            if (match) {
-                lat = match[1];
-                lon = match[2];
-                name = match[3] ? match[3].trim() : "";
-            }
-
-            if (!lat) {
-                let match2 = line.match(/^\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?(?:\s+(.*))?/);
-                if (match2) {
-                    lat = match2[1];
-                    lon = match2[2];
-                    name = match2[3] ? match2[3].trim() : "";
-                }
-            }
-
-            if (!lat) {
-                let match3 = line.match(/([北南])\s*(\d+(?:\.\d+)?)°?\s*([東西])\s*(\d+(?:\.\d+)?)°?(?:\s+(.*))?/);
-                if (match3) {
-                    let latDir = match3[1];
-                    let latVal = parseFloat(match3[2]);
-                    let lonDir = match3[3];
-                    let lonVal = parseFloat(match3[4]);
-
-                    lat = (latDir === "南") ? -latVal : latVal;
-                    lon = (lonDir === "西") ? -lonVal : lonVal;
-                    name = match3[5] ? match3[5].trim() : "";
-                }
-            }
-
-            if (!lat) {
-                let match4 = line.match(/(\d+(?:\.\d+)?)°?\s*([NS])\s*,\s*(\d+(?:\.\d+)?)°?\s*([EW])(?:\s+(.*))?/i);
-                if (match4) {
-                    let latVal = parseFloat(match4[1]);
-                    let latDir = match4[2].toUpperCase();
-                    let lonVal = parseFloat(match4[3]);
-                    let lonDir = match4[4].toUpperCase();
-
-                    lat = (latDir === "S") ? -latVal : latVal;
-                    lon = (lonDir === "W") ? -lonVal : lonVal;
-                    name = match4[5] ? match4[5].trim() : "";
-                }
-            }
-
-          if (lat !== null && lon !== null) {
-
-			// ✅ 新增：名稱在「前一行」
-			if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
-				name = lines[i - 1].trim();
-			}
-
-			// 原本：名稱在「下一行」
-			if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
-				name = lines[i + 1].trim();
-				i++;
-			}
-
-			points.push({ lat, lon, name });
-}
-        }
-    }
-
-    if (points.length === 0) {
+	let points = parseInput(text);
+	 if (points.length === 0) {
 	showToast("沒有抓到任何座標！", 0, "error");
         //alert("沒有抓到任何座標！");
         return;
@@ -524,43 +576,8 @@ function reviewmap(){
 	let originalCount = points.length;
 	let result = removeDuplicate(points);
 	let uniquePoints = result.unique;
-	
-	let pointnum = parseFloat(document.getElementById("pointnum")?.value);
-	let circleMode = document.getElementById("circleMode")?.checked;
-	let radius = parseFloat(document.getElementById("radiusInput")?.value);
-	if (circleMode) {
-    if (isNaN(pointnum) || pointnum < 3) {
-        alert("種花點數至少要 3");
-        return;
-    }
-
-    if (isNaN(radius) || radius <= 0) {
-	 showToast("半徑需為正數", 0, "error");
-        //alert("半徑需為正數");
-        return;
-    }
-}
-if (circleMode && !isNaN(radius) && radius > 0) {
-
-    let newPoints = [];
-
-    uniquePoints.forEach(p => {
-        let lat = parseFloat(p.lat);
-        let lon = parseFloat(p.lon);
-
-        let circle = generatePentagon(lat, lon, radius,pointnum);
-
-        circle.forEach((pt, idx) => {
-            newPoints.push({
-                lat: pt.lat,
-                lon: pt.lon,
-                name: p.name ? `${p.name}_${idx+1}` : ""
-            });
-        });
-    });
-
-    uniquePoints = newPoints;
-}
+	uniquePoints = applyCircle(uniquePoints);
+	if (!uniquePoints) return;
 	let duplicateCount = result.duplicateCount;
 	let finalCount = uniquePoints.length;
 
@@ -574,90 +591,7 @@ document.getElementById("stats").innerHTML =
 // ===== 轉換 =====
 function convert() {
     let text = document.getElementById("inputText").value.trim();
-    let points = [];
-
-    // ===== GPX =====
-    if (text.startsWith("<")) {
-        let xml = new DOMParser().parseFromString(text, "text/xml");
-
-        xml.querySelectorAll("trkpt, rtept, wpt").forEach(p => {
-            points.push({
-                lat: p.getAttribute("lat"),
-                lon: p.getAttribute("lon"),
-                name: ""
-            });
-        });
-
-    } else {
-        let lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-
-            let lat = null, lon = null, name = "";
-
-            let match = line.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.*))?/);
-            if (match) {
-                lat = match[1];
-                lon = match[2];
-                name = match[3] ? match[3].trim() : "";
-            }
-
-            if (!lat) {
-                let match2 = line.match(/^\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?(?:\s+(.*))?/);
-                if (match2) {
-                    lat = match2[1];
-                    lon = match2[2];
-                    name = match2[3] ? match2[3].trim() : "";
-                }
-            }
-
-            if (!lat) {
-                let match3 = line.match(/([北南])\s*(\d+(?:\.\d+)?)°?\s*([東西])\s*(\d+(?:\.\d+)?)°?(?:\s+(.*))?/);
-                if (match3) {
-                    let latDir = match3[1];
-                    let latVal = parseFloat(match3[2]);
-                    let lonDir = match3[3];
-                    let lonVal = parseFloat(match3[4]);
-
-                    lat = (latDir === "南") ? -latVal : latVal;
-                    lon = (lonDir === "西") ? -lonVal : lonVal;
-                    name = match3[5] ? match3[5].trim() : "";
-                }
-            }
-
-            if (!lat) {
-                let match4 = line.match(/(\d+(?:\.\d+)?)°?\s*([NS])\s*,\s*(\d+(?:\.\d+)?)°?\s*([EW])(?:\s+(.*))?/i);
-                if (match4) {
-                    let latVal = parseFloat(match4[1]);
-                    let latDir = match4[2].toUpperCase();
-                    let lonVal = parseFloat(match4[3]);
-                    let lonDir = match4[4].toUpperCase();
-
-                    lat = (latDir === "S") ? -latVal : latVal;
-                    lon = (lonDir === "W") ? -lonVal : lonVal;
-                    name = match4[5] ? match4[5].trim() : "";
-                }
-            }
-
-          if (lat !== null && lon !== null) {
-
-    // ✅ 新增：名稱在「前一行」
-    if (!name && i > 0 && !lines[i - 1].match(/^\(?\s*-?\d/)) {
-        name = lines[i - 1].trim();
-    }
-
-    // 原本：名稱在「下一行」
-    if (!name && i + 1 < lines.length && !lines[i + 1].match(/^\(?\s*-?\d/)) {
-        name = lines[i + 1].trim();
-        i++;
-    }
-
-    points.push({ lat, lon, name });
-}
-        }
-    }
-
+ 	let points = parseInput(text);
     if (points.length === 0) {
 	showToast("沒有抓到任何座標！", 0, "error");
         //alert("沒有抓到任何座標！");
@@ -668,44 +602,9 @@ function convert() {
 	let originalCount = points.length;
 	let result = removeDuplicate(points);
 	let uniquePoints = result.unique;
+	uniquePoints = applyCircle(uniquePoints);
+	if (!uniquePoints) return;
 	
-	let pointnum = parseFloat(document.getElementById("pointnum")?.value);
-	let circleMode = document.getElementById("circleMode")?.checked;
-	let radius = parseFloat(document.getElementById("radiusInput")?.value);
-	if (circleMode) {
-    if (isNaN(pointnum) || pointnum < 3) {
-	showToast("種花點數至少要 3", 0, "error")
-        //alert("種花點數至少要 3");
-        return;
-    }
-
-    if (isNaN(radius) || radius <= 0) {
-	 showToast("半徑需為正數", 0, "error");
-        //alert("半徑需為正數");
-        return;
-    }
-}
-if (circleMode && !isNaN(radius) && radius > 0) {
-
-    let newPoints = [];
-
-    uniquePoints.forEach(p => {
-        let lat = parseFloat(p.lat);
-        let lon = parseFloat(p.lon);
-
-        let circle = generatePentagon(lat, lon, radius,pointnum);
-
-        circle.forEach((pt, idx) => {
-            newPoints.push({
-                lat: pt.lat,
-                lon: pt.lon,
-                name: p.name ? `${p.name}_${idx+1}` : ""
-            });
-        });
-    });
-
-    uniquePoints = newPoints;
-}
 	let duplicateCount = result.duplicateCount;
 	let finalCount = uniquePoints.length;
 
@@ -745,7 +644,7 @@ document.getElementById("stats").innerHTML =
         finalName = "converted";
     }
 
-    let blob = new Blob([gpx], { type: "application/xml" });
+    let blob = new Blob([gpx], { type: "application/gpx+xml" });
 
     let a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
