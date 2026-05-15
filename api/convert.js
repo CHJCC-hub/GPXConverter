@@ -9,7 +9,7 @@ export default async function handler(req, res) {
         if (!text) {
             return res.status(400).send("No input text");
         }
-
+		text = sanitizeText(text);
         // ===== 型別修正 =====
         circleMode = (circleMode === true || circleMode === "true");
         radius = Number(radius);
@@ -17,7 +17,20 @@ export default async function handler(req, res) {
 
         if (isNaN(radius) || radius <= 0) radius = 30;
         if (isNaN(pointnum) || pointnum < 3) pointnum = 6;
+		//處理非法字元
+		function sanitizeText(text) {
 
+			// 移除 UTF-16 surrogate numeric entities
+			text = text.replace(/&#(?:5[5-6]\d{3});/g, "");
+
+			// 移除成對 surrogate entities
+			text = text.replace(/&#\d+;&#\d+;/g, "");
+
+			// 移除真正 unicode surrogate
+			text = text.replace(/[\uD800-\uDFFF]/g, "");
+
+			return text;
+		}
         // ===== 種花函式（後端版）=====
         function generateCircle(lat, lon, radius, pointnum) {
             let result = [];
