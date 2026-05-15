@@ -288,11 +288,26 @@ input[type="text"] {
 <script>
 let originalFileName = "";
 let map, polyline;
+//處理非法字元
+function sanitizeXml(text) {
+
+    // 移除 numeric surrogate entities
+    text = text.replace(/&#(?:55[0-9]{3}|56[0-9]{3});/g, "");
+
+    // 移除成對 surrogate entities
+    text = text.replace(/&#\d+;&#\d+;/g, "");
+
+    // 移除真正 unicode surrogate
+    text = text.replace(/[\uD800-\uDFFF]/g, "");
+
+    return text;
+}
 //處理解碼
 function parseInput(text) {
     let points = [];
 
   if (text.startsWith("<")) {
+    text = sanitizeXml(text);
         let xml = new DOMParser().parseFromString(text, "text/xml");
 
         xml.querySelectorAll("trkpt, rtept, wpt").forEach(p => {
